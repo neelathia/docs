@@ -1,0 +1,865 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>TTX Car End of Life – Knowledge Graph (How‑To Sections)</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&family=Syne:wght@400;500;600;700&display=swap');
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0a0c0f;
+    --surface: #131518;
+    --surface-hover: #1a1d22;
+    --border: #2a2d33;
+    --text: #e4e6ea;
+    --text-dim: #6b7078;
+    --accent-root: #f0a832;
+    --accent-service: #4fafee;
+    --accent-category: #6dd4a0;
+    --accent-group: #b888f0;
+    --accent-process: #f07a6d;
+    --accent-howto: #ffd166;
+    --accent-section: #9aa5b1;
+    --accent-system: #8ecae6;
+    --accent-stakeholder: #cdb4db;
+    --accent-metric: #a7c957;
+    --accent-risk: #ff7b7b;
+  }
+  body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; position: relative; }
+  body::before {
+    content:''; position:fixed; inset:0;
+    background: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+    pointer-events:none; z-index:999;
+  }
+  .topbar {
+    position:fixed; top:0; left:0; right:0; z-index:100;
+    height:56px; background: rgba(10,12,15,0.85); backdrop-filter: blur(18px);
+    border-bottom: 1px solid var(--border);
+    display:flex; align-items:center; justify-content:space-between; padding: 0 20px; gap: 14px;
+  }
+  .topbar-title { font-family:'Syne',sans-serif; font-weight:600; font-size:15px; letter-spacing:0.03em; white-space: nowrap; }
+  .topbar-title span { color: var(--accent-root); }
+  .legend { display:flex; gap:14px; flex-wrap:wrap; align-items:center; justify-content:center; }
+  .legend-item { display:flex; align-items:center; gap:7px; font-size:12px; color: var(--text-dim); cursor:pointer; user-select:none; transition: color .2s; white-space: nowrap; }
+  .legend-item:hover { color: var(--text); }
+  .legend-dot { width:11px; height:11px; border-radius:50%; }
+  .hint { font-size:11px; color: var(--text-dim); letter-spacing:0.02em; white-space: nowrap; }
+
+  .panel {
+    position:fixed; top:56px; right:0; width:360px; bottom:0;
+    background: rgba(19,21,24,0.92); backdrop-filter:blur(18px);
+    border-left: 1px solid var(--border);
+    z-index:50; overflow-y:auto;
+    transition: transform .32s cubic-bezier(.4,0,.2,1);
+    transform: translateX(100%);
+    padding: 22px 20px;
+  }
+  .panel.open { transform: translateX(0); }
+  .panel-close { position:absolute; top:12px; right:14px; background:none; border:none; color: var(--text-dim); font-size:20px; cursor:pointer; line-height:1; }
+  .panel-close:hover { color: var(--text); }
+  .panel-badge { display:inline-block; font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:0.08em; padding: 3px 8px; border-radius:20px; margin-bottom:10px; }
+  .panel-title { font-family:'Syne',sans-serif; font-weight:600; font-size:18px; margin-bottom:6px; line-height: 1.2; }
+  .panel-desc { font-size:13px; color: var(--text-dim); line-height:1.5; margin-bottom:16px; }
+  .panel-section-label { font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:0.1em; color: var(--text-dim); margin-bottom:8px; margin-top:16px; }
+  .panel-children { display:flex; flex-direction:column; gap:6px; }
+  .panel-child {
+    background: var(--surface); border: 1px solid var(--border); border-radius:10px;
+    padding: 10px 12px; font-size:13px; cursor:pointer;
+    transition: background .18s, border-color .18s;
+    display:flex; align-items:center; gap:9px;
+  }
+  .panel-child:hover { background: var(--surface-hover); border-color: rgba(255,255,255,0.15); }
+  .panel-child .child-dot { width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+  .panel-child .child-label { color: var(--text); }
+  .panel-child .child-sub { font-size:11px; color: var(--text-dim); }
+
+  #graph-container { position:fixed; inset:0; top:56px; }
+  svg { width:100%; height:100%; }
+  .link { stroke: var(--border); stroke-width: 1.4; fill:none; transition: stroke .2s; }
+  .link.cross { stroke-dasharray: 4 3; stroke: #1e2128; }
+  .node-group { cursor:pointer; }
+  .node-circle { transition: filter .2s, opacity .2s; }
+  .node-group:hover .node-circle { filter: brightness(1.12); }
+  .node-label { font-family:'DM Sans',sans-serif; font-size:10.5px; fill: var(--text-dim); text-anchor: middle; pointer-events: none; transition: fill .2s; }
+  .node-group:hover .node-label { fill: var(--text); }
+  .node-group.selected .node-circle { stroke:#fff; stroke-width:2.5; opacity: 1; }
+  .node-group.selected .node-label { fill:#fff; font-weight:600; }
+  .node-ring { fill:none; stroke-width:3; opacity:0; transition: opacity .25s; }
+  .node-group.selected .node-ring { opacity:0.35; }
+
+  .zoom-controls {
+    position:fixed; bottom:24px; left:50%; transform:translateX(-50%);
+    z-index:60; display:flex; gap:4px;
+    background: rgba(19,21,24,0.88); backdrop-filter:blur(14px);
+    border:1px solid var(--border); border-radius:32px; padding:5px;
+  }
+  .zoom-btn {
+    width:36px; height:36px; border-radius:50%;
+    background: var(--surface); border:1px solid var(--border);
+    color: var(--text); font-size:18px;
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer; transition: background .15s;
+  }
+  .zoom-btn:hover { background: var(--surface-hover); }
+  .breadcrumb {
+    position:fixed; top:64px; left:18px; z-index:60;
+    font-size:11px; color: var(--text-dim);
+    display:flex; flex-wrap:wrap; gap:4px; align-items:center;
+    max-width: calc(100vw - 390px);
+  }
+  .breadcrumb .sep { opacity:.4; }
+  .breadcrumb .bc-item { cursor:pointer; transition:color .15s; }
+  .breadcrumb .bc-item:hover { color: var(--text); }
+  .breadcrumb .bc-item.active { color: var(--text); font-weight:600; }
+</style>
+
+<style>
+  /* -------- GUIDED TOUR -------- */
+  .tour-btn{
+    margin-left:16px;
+    padding:8px 12px;
+    border-radius:999px;
+    border:1px solid var(--border);
+    background: rgba(19,21,24,0.7);
+    color: var(--text);
+    font-size:12px;
+    cursor:pointer;
+    transition: background .15s, border-color .15s, transform .15s;
+    white-space:nowrap;
+  }
+  .tour-btn:hover{
+    background: rgba(26,29,34,0.9);
+    border-color: rgba(255,255,255,0.18);
+    transform: translateY(-1px);
+  }
+
+  .tour-overlay{
+    position:fixed;
+    inset:0;
+    z-index:200;
+    background: rgba(10,12,15,0.62);
+    backdrop-filter: none;
+    display:none;
+  }
+  .tour-overlay.open{ display:block; }
+
+  .tour-card{
+    position:fixed;
+    left:24px;
+    bottom:24px;
+    width:min(520px, calc(100vw - 48px));
+    background: rgba(19,21,24,0.92);
+    border:1px solid var(--border);
+    border-radius:16px;
+    padding:16px 16px 14px;
+    box-shadow: 0 18px 60px rgba(0,0,0,0.55);
+    z-index:210;
+  }
+  .tour-kicker{
+    font-size:10px;
+    font-weight:700;
+    letter-spacing:0.12em;
+    text-transform:uppercase;
+    color: var(--text-dim);
+    margin-bottom:6px;
+  }
+  .tour-title{
+    font-family:'Syne',sans-serif;
+    font-weight:600;
+    font-size:16px;
+    margin-bottom:8px;
+  }
+  .tour-body{
+    font-size:13px;
+    color: var(--text);
+    line-height:1.45;
+  }
+  .tour-actions{
+    display:flex;
+    gap:8px;
+    margin-top:12px;
+    align-items:center;
+  }
+  .tour-actions .spacer{ flex:1; }
+  .tour-pill{
+    font-size:11px;
+    color: var(--text-dim);
+  }
+  .tour-cta{
+    padding:8px 10px;
+    border-radius:10px;
+    border:1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    font-size:12px;
+    cursor:pointer;
+    transition: background .15s, border-color .15s;
+  }
+  .tour-cta:hover{ background: var(--surface-hover); border-color: rgba(255,255,255,0.16); }
+  .tour-cta.primary{
+    background: rgba(79,175,238,0.18);
+    border-color: rgba(79,175,238,0.35);
+  }
+  .tour-cta.primary:hover{
+    background: rgba(79,175,238,0.26);
+    border-color: rgba(79,175,238,0.5);
+  }
+
+  /* subtle pulse on the selected node during tour */
+  .node-group.tour-focus .node-ring{ opacity:0.55; animation: tourPulse 1.8s ease-in-out infinite; }
+  @keyframes tourPulse{
+    0%,100%{ opacity:0.25; }
+    50%{ opacity:0.7; }
+  }
+
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-title">TTX <span>Knowledge Graph</span> · Car End of Life · How‑To Sections</div>
+  <div class="legend" id="legend"></div>
+  <div class="hint">Click to explore · Drag to move · Scroll to zoom</div>
+  <button class="tour-btn" id="tour-start" title="Guided tour">Guided tour</button>
+</div>
+
+<div class="breadcrumb" id="breadcrumb"></div>
+<div id="graph-container"><svg id="graph"></svg></div>
+
+<div class="panel" id="panel">
+  <button class="panel-close" id="panel-close">&times;</button>
+  <div id="panel-content"></div>
+</div>
+
+<div class="zoom-controls">
+  <button class="zoom-btn" id="zoom-in">+</button>
+  <button class="zoom-btn" id="zoom-reset">⇳</button>
+  <button class="zoom-btn" id="zoom-out">−</button>
+</div>
+
+<script>
+const categories = {
+  root:        { color:getCSS('--accent-root'), label:'Root' },
+  service:     { color:getCSS('--accent-service'), label:'Service (L1)' },
+  category:    { color:getCSS('--accent-category'), label:'Category (L2)' },
+  group:       { color:getCSS('--accent-group'), label:'Process Group (L3)' },
+  process:     { color:getCSS('--accent-process'), label:'Process (L4)' },
+  howto:       { color:getCSS('--accent-howto'), label:'How‑To' },
+  section:     { color:getCSS('--accent-section'), label:'How‑To Section' },
+  system:      { color:getCSS('--accent-system'), label:'System' },
+  stakeholder: { color:getCSS('--accent-stakeholder'), label:'Role / Team' },
+  metric:      { color:getCSS('--accent-metric'), label:'Metric' },
+  risk:        { color:getCSS('--accent-risk'), label:'Failure / Exception' }
+};
+function getCSS(varName){ return getComputedStyle(document.documentElement).getPropertyValue(varName).trim(); }
+
+const SECTION_DEFS = [
+  { key:'purpose',       label:'Purpose',                blurb:'What this doc helps the user do, and scope boundaries. (Core intent signal for AI.)' },
+  { key:'audience',      label:'Intended Audience',      blurb:'Who this doc is for. (Role, language, context selection.)' },
+  { key:'overview',      label:'Overview',               blurb:'What the task is and why it exists (conceptual anchor; no steps).' },
+  { key:'decision',      label:'Decision Logic',         blurb:'When to use vs not use (Destroy vs Scrap vs Sell vs Lease Return).' },
+  { key:'preconditions', label:'Pre‑conditions',         blurb:'Required data, approvals, permissions, and “before you begin” checks.' },
+  { key:'actions',       label:'Actions / Steps',        blurb:'Exact step-by-step workflow and validations (AI action graph).' },
+  { key:'post',          label:'Post‑conditions',        blurb:'What the system does after save; completion signals; audit trail.' },
+  { key:'impact',        label:'System Impact & Timing', blurb:'Downstream behavior (Oracle/UMLER/etc), expected processing time, success criteria.' },
+  { key:'troubleshoot',  label:'Troubleshooting Table',  blurb:'Symptom → Likely cause → What to do → Who owns.' },
+  { key:'glossary',      label:'Glossary / Fields',      blurb:'Field definitions (Destroy Reason, Settlement Value, Effective Date, etc).' },
+  { key:'related',       label:'Related Tasks',          blurb:'Links to other tasks (Scrap/Sell/Lease Return/Batch).' },
+  { key:'appendix',      label:'Appendix',              blurb:'Optional advanced scenarios (batch import, edge cases).' }
+];
+
+const data = {
+  nodes: [
+    { id:'kb-root', label:'TTX\nKnowledge Base', cat:'root', r:38, depth:0,
+      desc:'Root of the knowledge base. Enterprise Service → Category → Process Group → Process → How‑To → Sections.',
+      children:['svc-maintain-railcar','svc-fin-res'] },
+
+    { id:'svc-maintain-railcar', label:'Maintain\nRailcar', cat:'service', r:26, depth:1, parent:'kb-root',
+      desc:'Service overview for Maintain Railcar. Asset lifecycle, maintenance, repairs and reporting.',
+      children:['cat-40-manage-railcar-asset'] },
+    { id:'svc-fin-res', label:'Manage\nFinancials &\nResources', cat:'service', r:24, depth:1, parent:'kb-root',
+      desc:'Service overview for Manage Financials & Resources. Finance, invoicing, procure‑to‑pay, inventory, AP/expense.',
+      children:[] },
+
+    { id:'cat-40-manage-railcar-asset', label:'40: Manage\nRailcar Asset', cat:'category', r:22, depth:2, parent:'svc-maintain-railcar',
+      desc:'Category overview. Railcar asset lifecycle: purchase/delivery, maintain, end-of-life.',
+      children:['grp-40-3-end-of-life'] },
+
+    { id:'grp-40-3-end-of-life', label:'40.3:\nEnd of Life\nof a Railcar', cat:'group', r:19, depth:3, parent:'cat-40-manage-railcar-asset',
+      desc:'Process group: dispose of railcars (Destroy, Scrap, Sell, Lease Return).',
+      children:['proc-destroy','proc-scrap','proc-sell','proc-lease-return'] },
+
+    { id:'proc-destroy', label:'Destroy\nRailcar', cat:'process', r:18, depth:4, parent:'grp-40-3-end-of-life',
+      desc:'Permanently remove railcar from service due to total loss / irreparable damage.',
+      children:['howto-destroy-asset-hub','howto-destroy-umler','howto-destroy-oracle','howto-destroy-eshift'] },
+    { id:'proc-scrap', label:'Scrap\nRailcar', cat:'process', r:18, depth:4, parent:'grp-40-3-end-of-life',
+      desc:'Dispose with salvageable components/scrap value; capture salvage & settlement details.',
+      children:['howto-scrap-asset-hub','howto-scrap-umler','howto-scrap-oracle','howto-scrap-eshift'] },
+    { id:'proc-sell', label:'Sell\nRailcar', cat:'process', r:18, depth:4, parent:'grp-40-3-end-of-life',
+      desc:'Transfer ownership to buyer; update asset record, financial posting, and regulatory reporting.',
+      children:['howto-sell-asset-hub','howto-sell-umler','howto-sell-oracle','howto-sell-eshift'] },
+    { id:'proc-lease-return', label:'Lease\nReturn', cat:'process', r:18, depth:4, parent:'grp-40-3-end-of-life',
+      desc:'Return leased equipment; update availability, contract status, and reporting.',
+      children:['howto-lease-asset-hub','howto-lease-umler','howto-lease-oracle','howto-lease-eshift'] },
+
+    { id:'howto-destroy-asset-hub', label:'How‑To:\nDestroy in\nAsset Hub', cat:'howto', r:16, depth:5, parent:'proc-destroy', desc:'Procedure in Asset Hub / EAM. Includes common section nodes (TOC).', children:[] },
+    { id:'howto-scrap-asset-hub', label:'How‑To:\nScrap in\nAsset Hub', cat:'howto', r:16, depth:5, parent:'proc-scrap', desc:'Procedure in Asset Hub / EAM. Includes common section nodes (TOC).', children:[] },
+    { id:'howto-sell-asset-hub', label:'How‑To:\nSell in\nAsset Hub', cat:'howto', r:16, depth:5, parent:'proc-sell', desc:'Procedure in Asset Hub / EAM. Includes common section nodes (TOC).', children:[] },
+    { id:'howto-lease-asset-hub', label:'How‑To:\nLease Return\nin Asset Hub', cat:'howto', r:16, depth:5, parent:'proc-lease-return', desc:'Procedure in Asset Hub / EAM. Includes common section nodes (TOC).', children:[] },
+
+    { id:'howto-destroy-umler', label:'How‑To:\nConfirm status\nin UMLER', cat:'howto', r:14, depth:5, parent:'proc-destroy', desc:'Placeholder: confirm disposition status in Railinc UMLER; timing and resubmission rules.', children:[] },
+    { id:'howto-destroy-oracle', label:'How‑To:\nConfirm posting\nin Oracle ERP', cat:'howto', r:14, depth:5, parent:'proc-destroy', desc:'Placeholder: confirm accounting events/write‑off posting in Oracle ERP (batch timing, exceptions).', children:[] },
+    { id:'howto-destroy-eshift', label:'How‑To:\nDisposition workflow\nin eSHIFT', cat:'howto', r:14, depth:5, parent:'proc-destroy', desc:'Placeholder: approvals/coordination and disposition tracking in eSHIFT (if used).', children:[] },
+
+    { id:'howto-scrap-umler', label:'How‑To:\nConfirm status\nin UMLER', cat:'howto', r:14, depth:5, parent:'proc-scrap', desc:'Placeholder: confirm scrapped/disposed reporting in UMLER.', children:[] },
+    { id:'howto-scrap-oracle', label:'How‑To:\nConfirm posting\nin Oracle ERP', cat:'howto', r:14, depth:5, parent:'proc-scrap', desc:'Placeholder: confirm salvage accounting posting in Oracle ERP.', children:[] },
+    { id:'howto-scrap-eshift', label:'How‑To:\nInventory/salvage\nin eSHIFT', cat:'howto', r:14, depth:5, parent:'proc-scrap', desc:'Placeholder: related salvage/inventory steps in eSHIFT (if used).', children:[] },
+
+    { id:'howto-sell-umler', label:'How‑To:\nConfirm status\nin UMLER', cat:'howto', r:14, depth:5, parent:'proc-sell', desc:'Placeholder: confirm sold/removed status in UMLER.', children:[] },
+    { id:'howto-sell-oracle', label:'How‑To:\nConfirm posting\nin Oracle ERP', cat:'howto', r:14, depth:5, parent:'proc-sell', desc:'Placeholder: confirm sale proceeds and asset retirement posting in Oracle ERP.', children:[] },
+    { id:'howto-sell-eshift', label:'How‑To:\nSales paperwork\nin eSHIFT', cat:'howto', r:14, depth:5, parent:'proc-sell', desc:'Placeholder: sales coordination/paperwork steps in eSHIFT (if used).', children:[] },
+
+    { id:'howto-lease-umler', label:'How‑To:\nConfirm status\nin UMLER', cat:'howto', r:14, depth:5, parent:'proc-lease-return', desc:'Placeholder: confirm lease return reporting status in UMLER.', children:[] },
+    { id:'howto-lease-oracle', label:'How‑To:\nConfirm posting\nin Oracle ERP', cat:'howto', r:14, depth:5, parent:'proc-lease-return', desc:'Placeholder: confirm lease return financial update posting in Oracle ERP.', children:[] },
+    { id:'howto-lease-eshift', label:'How‑To:\nLease contract\nin eSHIFT', cat:'howto', r:14, depth:5, parent:'proc-lease-return', desc:'Placeholder: lease contract and return steps in eSHIFT (if used).', children:[] },
+
+    { id:'sys-asset-hub', label:'Asset Hub\n(Hexagon EAM)', cat:'system', r:14, depth:3, desc:'Primary asset system for railcar lifecycle actions (Asset Hub / EAM).' },
+    { id:'sys-umler', label:'Railinc\nUMLER', cat:'system', r:14, depth:3, desc:'Industry reporting system (AAR). Receives disposition status updates.' },
+    { id:'sys-oracle', label:'Oracle\nERP', cat:'system', r:14, depth:3, desc:'Financial system. Receives accounting events (write‑offs, proceeds) often via batch.' },
+    { id:'sys-eshift', label:'eSHIFT', cat:'system', r:14, depth:3, desc:'Workflow/process platform used for approvals and coordination (when applicable).' },
+
+    { id:'role-wreck-admin', label:'Wreck\nAdministration', cat:'stakeholder', r:13, depth:3, desc:'Initiates/coordinates wreck and disposition actions; provides approvals and required inputs.' },
+    { id:'role-inv-acct', label:'Inventory\nAccounting', cat:'stakeholder', r:13, depth:3, desc:'Financial treatment of destroy/scrap/sale (settlement, postings, reconciliation).' },
+    { id:'role-fleet', label:'Fleet /\nGeneral Equipment', cat:'stakeholder', r:13, depth:3, desc:'Coordinates lease returns and fleet availability impacts.' },
+    { id:'role-asset-support', label:'Asset Hub\nSupport', cat:'stakeholder', r:13, depth:3, desc:'Access, data issues, integration escalations.' },
+
+    { id:'m-latency', label:'Metric:\nDownstream\nLatency', cat:'metric', r:12, depth:3, desc:'Time from Asset Hub disposition to Oracle/UMLER updates (near real‑time vs batch).' },
+    { id:'m-compliance', label:'Metric:\nReporting\nCompliance', cat:'metric', r:12, depth:3, desc:'% dispositions reported within the required window/SLA (example).' },
+
+    { id:'x-missing-data', label:'Exception:\nMissing required\ninputs', cat:'risk', r:12, depth:3, desc:'Disposition cannot proceed if required inputs/approvals are missing (e.g., settlement value).' },
+    { id:'x-sync-delay', label:'Exception:\nIntegration/\nSync Delay', cat:'risk', r:12, depth:3, desc:'Downstream systems not updated within expected window; requires validation and escalation.' }
+  ],
+  crossLinks: [
+    { source:'proc-destroy', target:'proc-scrap', label:'alternative' },
+    { source:'proc-destroy', target:'proc-sell', label:'alternative' },
+    { source:'proc-destroy', target:'proc-lease-return', label:'alternative' },
+    { source:'proc-scrap', target:'proc-sell', label:'related' },
+
+    { source:'howto-destroy-asset-hub', target:'sys-asset-hub', label:'uses' },
+    { source:'howto-scrap-asset-hub', target:'sys-asset-hub', label:'uses' },
+    { source:'howto-sell-asset-hub', target:'sys-asset-hub', label:'uses' },
+    { source:'howto-lease-asset-hub', target:'sys-asset-hub', label:'uses' },
+
+    { source:'howto-destroy-umler', target:'sys-umler', label:'uses' },
+    { source:'howto-scrap-umler', target:'sys-umler', label:'uses' },
+    { source:'howto-sell-umler', target:'sys-umler', label:'uses' },
+    { source:'howto-lease-umler', target:'sys-umler', label:'uses' },
+
+    { source:'howto-destroy-oracle', target:'sys-oracle', label:'uses' },
+    { source:'howto-scrap-oracle', target:'sys-oracle', label:'uses' },
+    { source:'howto-sell-oracle', target:'sys-oracle', label:'uses' },
+    { source:'howto-lease-oracle', target:'sys-oracle', label:'uses' },
+
+    { source:'howto-destroy-eshift', target:'sys-eshift', label:'uses' },
+    { source:'howto-scrap-eshift', target:'sys-eshift', label:'uses' },
+    { source:'howto-sell-eshift', target:'sys-eshift', label:'uses' },
+    { source:'howto-lease-eshift', target:'sys-eshift', label:'uses' },
+
+    { source:'howto-destroy-asset-hub', target:'role-wreck-admin', label:'performed by' },
+    { source:'howto-destroy-asset-hub', target:'role-asset-support', label:'support' },
+    { source:'howto-scrap-asset-hub', target:'role-inv-acct', label:'performed by' },
+    { source:'howto-sell-asset-hub', target:'role-inv-acct', label:'performed by' },
+    { source:'howto-lease-asset-hub', target:'role-fleet', label:'performed by' },
+
+    { source:'proc-destroy', target:'m-latency', label:'measured by' },
+    { source:'proc-destroy', target:'m-compliance', label:'measured by' },
+    { source:'proc-destroy', target:'x-missing-data', label:'risk' },
+    { source:'proc-destroy', target:'x-sync-delay', label:'risk' },
+    { source:'proc-scrap', target:'x-sync-delay', label:'risk' }
+  ]
+};
+
+const nodeMap = {};
+data.nodes.forEach(n => nodeMap[n.id] = n);
+
+function sectionIdForHowto(howtoId, key){
+  const prefix = howtoId.replace('howto-','').replace(/[^a-z0-9]+/g,'-');
+  return `${prefix}-sec-${key}`;
+}
+
+// Add section nodes + connect as children
+const howtos = data.nodes.filter(n => n.cat === 'howto');
+const sectionNodes = [];
+howtos.forEach(ht => {
+  ht.children = SECTION_DEFS.map(sd => sectionIdForHowto(ht.id, sd.key));
+  SECTION_DEFS.forEach(sd => {
+    const isAssetHub = ht.id.endsWith('asset-hub');
+    const desc = isAssetHub ? sd.blurb : (sd.blurb + ' (placeholder – confirm with SMEs / system owners).');
+    sectionNodes.push({
+      id: sectionIdForHowto(ht.id, sd.key),
+      label: sd.label.split(' ').join('\n'),
+      cat:'section',
+      doc: ht.label.replace(/\n/g,' '),
+      howto: ht.id,
+      sectionKey: sd.key,
+      sectionLabel: sd.label,
+      r: 10.8,
+      depth: ht.depth + 1,
+      parent: ht.id,
+      desc
+    });
+  });
+});
+data.nodes = data.nodes.concat(sectionNodes);
+data.nodes.forEach(n => nodeMap[n.id] = n);
+
+// Extra cross-links from Related Tasks sections to processes
+function relatedSec(howtoId){ return sectionIdForHowto(howtoId, 'related'); }
+function troubleshootSec(howtoId){ return sectionIdForHowto(howtoId, 'troubleshoot'); }
+
+// Cross-links between matching sections across How-To docs (e.g., Purpose ↔ Purpose)
+const HOWTO_IDS = ['howto-destroy-asset-hub','howto-scrap-asset-hub','howto-sell-asset-hub','howto-lease-asset-hub'];
+const SECTION_KEYS = SECTION_DEFS.map(s => s.key);
+const sectionCrossLinks = [];
+SECTION_KEYS.forEach(key => {
+  for (let i = 0; i < HOWTO_IDS.length; i++) {
+    for (let j = i + 1; j < HOWTO_IDS.length; j++) {
+      sectionCrossLinks.push({
+        source: sectionIdForHowto(HOWTO_IDS[i], key),
+        target: sectionIdForHowto(HOWTO_IDS[j], key),
+        label: 'same section'
+      });
+    }
+  }
+});
+
+const extraCross = sectionCrossLinks.concat([
+  { source: relatedSec('howto-destroy-asset-hub'), target:'proc-scrap', label:'links to' },
+  { source: relatedSec('howto-destroy-asset-hub'), target:'proc-sell', label:'links to' },
+  { source: relatedSec('howto-destroy-asset-hub'), target:'proc-lease-return', label:'links to' },
+  { source: relatedSec('howto-scrap-asset-hub'), target:'proc-destroy', label:'links to' },
+
+  { source: troubleshootSec('howto-destroy-asset-hub'), target:'role-asset-support', label:'owned by' },
+  { source: troubleshootSec('howto-destroy-asset-hub'), target:'role-wreck-admin', label:'owned by' },
+  { source: troubleshootSec('howto-scrap-asset-hub'), target:'role-inv-acct', label:'owned by' }
+]);
+
+// Build tree links
+const treeLinks = [];
+data.nodes.forEach(n => {
+  if (n.children && n.children.length) n.children.forEach(cid => {
+    if (nodeMap[cid]) treeLinks.push({ source:n.id, target:cid, type:'tree' });
+  });
+});
+
+const crossLinks = data.crossLinks.concat(extraCross).map(l => ({...l, type:'cross'}));
+const allLinks = treeLinks.concat(crossLinks);
+
+// D3
+const W = window.innerWidth;
+const H = window.innerHeight - 56;
+const svg = d3.select('#graph').attr('width', W).attr('height', H);
+const g = svg.append('g');
+
+const zoom = d3.zoom().scaleExtent([0.22, 7]).on('zoom', (event) => g.attr('transform', event.transform));
+svg.call(zoom);
+const initTransform = d3.zoomIdentity.translate(W/2, H/2 + 24).scale(0.95);
+svg.call(zoom.transform, initTransform);
+
+const sim = d3.forceSimulation(data.nodes)
+  .force('link', d3.forceLink(allLinks).id(d => d.id)
+    .distance(d => {
+      if (d.type === 'cross') return 190;
+      const sDepth = (typeof d.source.depth === 'number') ? d.source.depth : 3;
+      if (sDepth <= 1) return 150;
+      if (sDepth === 2) return 120;
+      if (sDepth === 3) return 100;
+      if (sDepth === 4) return 90;
+      return 74;
+    })
+    .strength(d => d.type === 'cross' ? 0.08 : 0.28)
+  )
+  .force('charge', d3.forceManyBody().strength(d => -(d.r * d.r * 2.7)))
+  .force('collision', d3.forceCollide().radius(d => d.r + 18).strength(0.75))
+  .force('center', d3.forceCenter(0, 0))
+  .force('x', d3.forceX(0).strength(0.05))
+  .force('y', d3.forceY(0).strength(0.05))
+  .alphaDecay(0.03)
+  .velocityDecay(0.28);
+
+const link = g.append('g').selectAll('line')
+  .data(allLinks)
+  .join('line')
+  .attr('class', d => d.type === 'cross' ? 'link cross' : 'link');
+
+const node = g.append('g').selectAll('.node-group')
+  .data(data.nodes)
+  .join('g')
+  .attr('class', 'node-group')
+  .call(d3.drag()
+    .on('start', (event, d) => { if (!event.active) sim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+    .on('drag', (event, d) => { d.fx = event.x; d.fy = event.y; })
+    .on('end', (event, d) => { if (!event.active) sim.alphaTarget(0); d.fx = null; d.fy = null; })
+  )
+  .on('click', (event, d) => { event.stopPropagation(); selectNode(d); })
+  .on('dblclick', (event, d) => { event.stopPropagation(); zoomToNode(d); });
+
+node.append('circle').attr('class', 'node-ring').attr('r', d => d.r + 6).attr('stroke', d => categories[d.cat].color);
+node.append('circle')
+  .attr('class', 'node-circle')
+  .attr('r', d => d.r)
+  .attr('fill', d => categories[d.cat].color)
+  .attr('opacity', d => d.depth === 0 ? 1 : d.depth === 1 ? 0.86 : d.depth >= 6 ? 0.72 : 0.78)
+  .style('filter', d => `drop-shadow(0 2px 6px ${categories[d.cat].color}44)`);
+
+node.append('text')
+  .attr('class', 'node-label')
+  .attr('dy', '0.35em')
+  .each(function(d) {
+    const sel = d3.select(this);
+    const lines = (d.label || '').split('\n');
+    sel.selectAll('tspan').remove();
+    lines.forEach((line, i) => {
+      sel.append('tspan').attr('x', 0).attr('dy', i === 0 ? (lines.length > 1 ? '-0.3em' : '0') : '1.2em').text(line);
+    });
+  });
+
+sim.on('tick', () => {
+  link.attr('x1', d => d.source.x).attr('y1', d => d.source.y).attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+  node.attr('transform', d => `translate(${d.x},${d.y})`);
+});
+
+// Legend
+const legendEl = document.getElementById('legend');
+Object.entries(categories).forEach(([key, val]) => {
+  legendEl.innerHTML += `<div class="legend-item" data-cat="${key}">
+      <div class="legend-dot" style="background:${val.color}"></div>${val.label}</div>`;
+});
+
+// Selection + Panel
+let selectedNode = null;
+function nodeTitle(n){ return (n.label || '').replace(/\n/g,' '); }
+function nodeContext(n){
+  if (!n) return '';
+  if (n.cat === 'section') return `${n.doc || ''} · ${n.sectionLabel || nodeTitle(n)}`;
+  if (n.cat === 'howto') return n.tag ? `How-to · ${n.tag}` : 'How-to';
+  if (n.cat === 'process') return n.level ? `Process · ${n.level}` : 'Process';
+  return '';
+}
+function selectAndZoom(id){ const d = nodeMap[id]; if (!d) return; selectNode(d); zoomToNode(d); }
+window.selectAndZoom = selectAndZoom;
+
+function selectNode(d) {
+  node.classed('selected', false);
+  if (selectedNode && selectedNode.id === d.id) {
+    selectedNode = null; closePanel(); updateBreadcrumb(null);
+    link.style('stroke', l => l.type === 'cross' ? '#1e2128' : getCSS('--border')).style('stroke-width', 1.4);
+    return;
+  }
+  selectedNode = d;
+  node.filter(n => n.id === d.id).classed('selected', true);
+
+  const color = categories[d.cat].color;
+  link.style('stroke', function(l){
+      const sid = l.source.id || l.source, tid = l.target.id || l.target;
+      const connected = (sid === d.id || tid === d.id);
+      if (!connected) return l.type === 'cross' ? '#1e2128' : getCSS('--border');
+      return color;
+    })
+    .style('stroke-width', function(l){
+      const sid = l.source.id || l.source, tid = l.target.id || l.target;
+      const connected = (sid === d.id || tid === d.id);
+      return connected ? (l.type === 'cross' ? 2.2 : 2.6) : 1.4;
+    });
+
+  openPanel(d); updateBreadcrumb(d);
+}
+
+function openPanel(d) {
+  const color = categories[d.cat].color;
+  document.getElementById('panel').classList.add('open');
+
+  let childrenHtml = '';
+  if (d.children && d.children.length) {
+    childrenHtml = `<div class="panel-section-label">Contains</div><div class="panel-children">` +
+      d.children.map(cid => {
+        const child = nodeMap[cid]; if (!child) return '';
+        const cc = categories[child.cat].color;
+        return `<div class="panel-child" onclick="selectAndZoom('${cid}')">
+          <div class="child-dot" style="background:${cc}"></div>
+          <div>
+            <div class="child-label">${nodeTitle(child)}</div>
+            ${child.cat==='section' ? `<div class="child-sub" style="margin-top:2px">${child.doc || ''}</div>` : ''}
+            <div class="child-sub">${((child.desc||'')+'').substring(0,78)}…</div>
+          </div></div></div>`;
+      }).join('') + `</div>`;
+  }
+
+  const related = allLinks.filter(l => l.type === 'cross')
+    .filter(l => (l.source.id === d.id || l.target.id === d.id))
+    .map(l => {
+      const otherId = (l.source.id === d.id) ? l.target.id : l.source.id;
+      return { other: nodeMap[otherId], label: l.label };
+    })
+    .filter(x => x.other);
+
+  let relatedHtml = '';
+  if (related.length) {
+    relatedHtml = `<div class="panel-section-label">Connected</div><div class="panel-children">` +
+      related.slice(0, 14).map(x => {
+        const cc = categories[x.other.cat].color;
+        return `<div class="panel-child" onclick="selectAndZoom('${x.other.id}')">
+          <div class="child-dot" style="background:${cc}"></div>
+          <div><div class="child-label">${nodeTitle(x.other)}</div>
+          <div class="child-sub">${x.label}${x.other.cat==='section' ? ` · ${x.other.doc || ''}` : ''}</div></div></div>`;
+      }).join('') + `</div>`;
+  }
+
+  const badge = `<div class="panel-badge" style="background:${color}22; color:${color}; border:1px solid ${color}55;">${categories[d.cat].label}</div>`;
+  document.getElementById('panel-content').innerHTML = `${badge}<div class="panel-title">${nodeTitle(d)}</div><div class="panel-desc">${d.desc||''}</div>${d.cat==='section' ? `<div style="font-size:12px;color:var(--text-dim);margin-top:-10px;margin-bottom:14px">In: ${d.doc || ''}</div>` : ''}${childrenHtml}${relatedHtml}`;
+}
+
+function closePanel(){ document.getElementById('panel').classList.remove('open'); }
+document.getElementById('panel-close').addEventListener('click', closePanel);
+svg.on('click', () => { selectedNode=null; node.classed('selected',false); closePanel(); updateBreadcrumb(null);
+  link.style('stroke', l => l.type === 'cross' ? '#1e2128' : getCSS('--border')).style('stroke-width', 1.4);
+});
+
+// Breadcrumb
+function updateBreadcrumb(d){
+  const el = document.getElementById('breadcrumb');
+  if (!d){ el.innerHTML=''; return; }
+  const path=[]; let cur=d;
+  while(cur){ path.unshift(cur); cur = cur.parent ? nodeMap[cur.parent] : null; }
+  el.innerHTML = path.map((n,i)=>{
+    const cls = (i===path.length-1) ? 'bc-item active' : 'bc-item';
+    return `<span class="${cls}" onclick="selectAndZoom('${n.id}')">${nodeTitle(n)}</span>` + (i<path.length-1?`<span class="sep">›</span>`:'');
+  }).join('');
+}
+
+// Zoom controls
+function zoomToNode(d){
+  const t = d3.zoomTransform(svg.node());
+  const k = Math.min(2.2, Math.max(0.8, t.k));
+  svg.transition().duration(420).call(zoom.transform, d3.zoomIdentity.translate(W/2, H/2).scale(k).translate(-d.x, -d.y));
+}
+document.getElementById('zoom-in').addEventListener('click', () => svg.transition().duration(180).call(zoom.scaleBy, 1.25));
+document.getElementById('zoom-out').addEventListener('click', () => svg.transition().duration(180).call(zoom.scaleBy, 0.8));
+document.getElementById('zoom-reset').addEventListener('click', () => svg.transition().duration(260).call(zoom.transform, initTransform));
+
+// Legend focus filter
+let focusedCat=null;
+document.querySelectorAll('.legend-item').forEach(item=>{
+  item.addEventListener('click', ()=>{
+    const cat=item.getAttribute('data-cat');
+    if (focusedCat===cat){ focusedCat=null; resetFocus(); return; }
+    focusedCat=cat; applyFocus(cat);
+  });
+});
+function applyFocus(cat){
+  node.selectAll('.node-circle').attr('opacity', d => d.cat===cat ? 1 : 0.12);
+  node.selectAll('.node-label').attr('opacity', d => d.cat===cat ? 1 : 0.08);
+  link.attr('opacity', l => ((l.source.cat===cat)||(l.target.cat===cat)) ? 0.9 : 0.08);
+}
+function resetFocus(){
+  node.selectAll('.node-circle').attr('opacity', d => d.depth===0?1:d.depth===1?0.86:d.depth>=6?0.72:0.78);
+  node.selectAll('.node-label').attr('opacity', 1);
+  link.attr('opacity', 1);
+}
+</script>
+</body>
+<!-- GUIDED TOUR OVERLAY -->
+<div class="tour-overlay" id="tour-overlay"></div>
+<div class="tour-card" id="tour-card" style="display:none">
+  <div class="tour-kicker" id="tour-kicker">GUIDED TOUR</div>
+  <div class="tour-title" id="tour-title">Knowledge graph walkthrough</div>
+  <div class="tour-body" id="tour-body"></div>
+  <div class="tour-actions">
+    <button class="tour-cta" id="tour-back">Back</button>
+    <button class="tour-cta primary" id="tour-next">Next</button>
+    <div class="spacer"></div>
+    <div class="tour-pill" id="tour-progress"></div>
+    <button class="tour-cta" id="tour-exit">Exit</button>
+  </div>
+</div>
+
+</body>
+</html>
+<script>
+// ============================================================
+// GUIDED TOUR (annotation layer)
+// ============================================================
+(function(){
+  const startBtn = document.getElementById('tour-start');
+  const overlay = document.getElementById('tour-overlay');
+  const card = document.getElementById('tour-card');
+  const titleEl = document.getElementById('tour-title');
+  const bodyEl = document.getElementById('tour-body');
+  const kickerEl = document.getElementById('tour-kicker');
+  const progressEl = document.getElementById('tour-progress');
+  const backBtn = document.getElementById('tour-back');
+  const nextBtn = document.getElementById('tour-next');
+  const exitBtn = document.getElementById('tour-exit');
+
+  if(!startBtn) return;
+
+  // Pick representative node IDs that exist in this file.
+  const MAP = (typeof nodeMap !== 'undefined') ? nodeMap : (window.nodeMap || {});
+  const has = (id) => !!MAP[id];
+  // (These IDs come from the data array above.)
+  const pick = (candidates) => candidates.find(id => has(id));
+  const ID = {
+    root: pick(['root','kb-root','ttx-root']),
+    service: pick(['svc-maintain-railcar','service-maintain-railcar','maintain-railcar']),
+    category: pick(['cat-40-manage-railcar-asset','category-40','40-manage-railcar-asset']),
+    group: pick(['pg-40-3-end-of-life','process-group-40-3','40-3-end-of-life']),
+    process: pick(['p-destroy-railcar','process-destroy-railcar','destroy-railcar']),
+    howto: pick(['ht-destroy-asset-hub','howto-destroy-asset-hub','destroy-car-in-asset-hub']),
+    section: pick(['sec-destroy-purpose','destroy-purpose','section-purpose-destroy']),
+    crosslink: pick(['sec-scrap-purpose','sec-sell-purpose','sec-lease-purpose']),
+    systems: pick(['sys-asset-hub','sys-umler','sys-oracle']),
+  };
+
+  const steps = [
+    {
+      title: 'What you’re looking at',
+      body: `This visualization shows how your documentation becomes an “AI-ready” knowledge map.<br><br>
+<strong>Big idea:</strong> when content is structured + linked (process → how-to → section → related items), an AI agent can retrieve the right answer instead of guessing.`,
+      focusId: null
+    },
+    {
+      title: 'Root → enterprise services',
+      body: `Start at the root (<em>TTX Knowledge Base</em>) and expand into Enterprise Services.<br><br>
+This is your top-level navigation and the entry point for both humans and AI retrieval.`,
+      focusId: ID.root
+    },
+    {
+      title: 'Service overview nodes',
+      body: `Each Enterprise Service has an <strong>overview doc</strong> (L1).<br>
+Example: <em>Maintain Railcar</em> becomes a stable hub that links to all its categories, process groups, and key systems.`,
+      focusId: ID.service
+    },
+    {
+      title: 'Category overviews',
+      body: `Each Category (Level 1) becomes an <strong>L2 overview doc</strong>.<br>
+Example: <em>40: Manage Railcar Asset</em> connects the process groups under it and the ecosystems (systems) it touches.`,
+      focusId: ID.category
+    },
+    {
+      title: 'Process group overview',
+      body: `Process Groups (Level 2) become <strong>L3 overview docs</strong>.<br>
+Example: <em>40.3 End of Life of a Railcar</em> groups together Destroy, Scrap, Sell, Lease Return — and keeps ownership clear.`,
+      focusId: ID.group
+    },
+    {
+      title: 'Process (Level 3) node',
+      body: `A Process node is the “business lens.”<br><br>
+It answers: <strong>what outcome</strong> we’re driving, <strong>when</strong> it applies, and <strong>which systems</strong> are involved.`,
+      focusId: ID.process
+    },
+    {
+      title: 'How‑to nodes (system lens)',
+      body: `Each Process can have multiple How‑tos — one per key application.<br>
+Example: “Destroy Railcar” → “How to Destroy Car in Asset Hub” (and later: eSHIFT / Oracle / UMLER).`,
+      focusId: ID.howto
+    },
+    {
+      title: 'Sections are first‑class nodes',
+      body: `Inside each How‑to, the table of contents is modeled as reusable <strong>section nodes</strong> (Purpose, Steps, Troubleshooting, etc.).<br><br>
+This makes the content <em>queryable</em> — AI can jump directly to the right section.`,
+      focusId: ID.section
+    },
+    {
+      title: 'Crosslinks = better answers',
+      body: `Sections can crosslink across How‑tos.<br>
+Example: <strong>Purpose</strong> of Destroy connects to <strong>Purpose</strong> of Scrap/Sell/Lease Return — so the AI can compare and route users to the right action.`,
+      focusId: ID.crosslink
+    },
+    {
+      title: 'Systems & timing matter',
+      body: `System nodes capture downstream impacts (UFD/Oracle/UMLER timing), which is crucial for troubleshooting (“why hasn’t Oracle updated yet?”).`,
+      focusId: ID.systems
+    },
+    {
+      title: 'Why this matters for an AI agent',
+      body: `An AI agent is only as good as the structure it can retrieve from.<br><br>
+If content is <strong>unstructured</strong>, the agent blends answers (“garbage in → garbage out”).<br>
+If content is <strong>modeled + linked</strong>, the agent can: route correctly, explain decisions, and troubleshoot with confidence.`,
+      focusId: null
+    }
+  ].filter(s => s.focusId !== undefined); // keep null OK
+
+  let i = 0;
+  let active = false;
+
+  function clearTourFocus(){
+    d3.selectAll('.node-group').classed('tour-focus', false);
+  }
+
+  function applyFocus(focusId){
+    clearTourFocus();
+    if(!focusId || !has(focusId)) return;
+    // select + zoom using existing helper if present
+    if(typeof window.selectAndZoom === 'function'){
+      window.selectAndZoom(focusId);
+    }else{
+      // fallback: just zoom if available
+      const d = MAP[focusId];
+      if(d && typeof window.zoomToNode === 'function') window.zoomToNode(d);
+    }
+    d3.selectAll('.node-group').filter(d => d.id === focusId).classed('tour-focus', true);
+  }
+
+  function render(){
+    const step = steps[i];
+    kickerEl.textContent = 'GUIDED TOUR';
+    titleEl.textContent = step.title;
+    bodyEl.innerHTML = step.body;
+    progressEl.textContent = `${i+1} / ${steps.length}`;
+    backBtn.disabled = (i === 0);
+    backBtn.style.opacity = (i === 0) ? 0.5 : 1;
+    nextBtn.textContent = (i === steps.length - 1) ? 'Done' : 'Next';
+    applyFocus(step.focusId);
+  }
+
+  function open(){
+    active = true;
+    overlay.classList.add('open');
+    card.style.display = 'block';
+    i = 0;
+    render();
+  }
+
+  function close(){
+    active = false;
+    overlay.classList.remove('open');
+    card.style.display = 'none';
+    clearTourFocus();
+  }
+
+  startBtn.addEventListener('click', open);
+  overlay.addEventListener('click', close);
+  exitBtn.addEventListener('click', close);
+
+  backBtn.addEventListener('click', () => {
+    if(i > 0){ i -= 1; render(); }
+  });
+
+  nextBtn.addEventListener('click', () => {
+    if(i < steps.length - 1){ i += 1; render(); }
+    else { close(); }
+  });
+
+  // keyboard support
+  window.addEventListener('keydown', (e) => {
+    if(!active) return;
+    if(e.key === 'Escape') close();
+    if(e.key === 'ArrowRight' || e.key === 'Enter') nextBtn.click();
+    if(e.key === 'ArrowLeft') backBtn.click();
+  });
+})();
+</script>
+
+</html>
