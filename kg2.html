@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>TTX Knowledge Graph – Demo v5 (Scrap / Destroy / Sell / Lease Return)</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600&family=Syne:wght@400;500;600;700&display=swap');
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root{
+    --bg:#0a0c0f; --surface:#131518; --surface-hover:#1a1d22; --border:#2a2d33;
+    --text:#e4e6ea; --text-dim:#6b7078;
+
+    --accent-root:#f0a832;
+    --accent-service:#4fafee;
+    --accent-l1:#6dd4a0;
+    --accent-l2:#b888f0;
+    --accent-l3:#f07a6d;
+
+    --accent-sop:#ffb703;
+    --accent-howto:#ffd166;
+    --accent-section:#9aa5b1;
+
+    --accent-eco:#6dd4a0;
+    --accent-system:#8ecae6;
+
+    --accent-integration:#caffbf;
+    --accent-data:#90dbf4;
+    --accent-tech:#a7c957;
+
+    --accent-role:#cdb4db;
+    --accent-governance:#ff7b7b;
+
+    --ok:#6dd4a0;
+    --warn:#ffd166;
+    --bad:#ff7b7b;
+  }
+  body{font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text); height:100vh; overflow:hidden;}
+  body::before{
+    content:''; position:fixed; inset:0;
+    background:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+    pointer-events:none; z-index:999;
+  }
+
+  .topbar{
+    position:fixed; inset:0 0 auto 0; height:66px; z-index:100;
+    background:rgba(10,12,15,0.85); backdrop-filter: blur(18px);
+    border-bottom:1px solid var(--border);
+    display:flex; align-items:center; justify-content:space-between; padding:0 14px; gap:12px;
+  }
+  .left{display:flex; flex-direction:column; gap:2px; min-width:380px;}
+  .topbar-title{font-family:'Syne',sans-serif; font-weight:600; font-size:15px; letter-spacing:0.03em; white-space:nowrap;}
+  .topbar-title span{color:var(--accent-root);}
+  .topbar-sub{font-size:11px; color:var(--text-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+
+  .searchbar{display:flex; gap:6px; align-items:center; min-width:320px; max-width:520px; width:34vw;}
+  .searchbar select{
+    flex:1; background:rgba(19,21,24,0.7); border:1px solid var(--border);
+    border-radius:12px; padding:10px 12px; color:var(--text); font-size:12px;
+    outline:none;
+  }
+  .searchbar button{
+    padding:10px 12px; border-radius:12px; border:1px solid var(--border);
+    background:rgba(79,175,238,0.18); color:var(--text); font-size:12px; cursor:pointer;
+    transition: background .15s, border-color .15s;
+    white-space:nowrap;
+  }
+  .searchbar button:hover{background:rgba(79,175,238,0.26); border-color:rgba(79,175,238,0.45);}
+
+  .legend{display:flex; gap:12px; flex-wrap:wrap; align-items:center; justify-content:flex-end; max-width:46vw;}
+  .legend-item{display:flex; align-items:center; gap:7px; font-size:12px; color:var(--text-dim); cursor:pointer; user-select:none; transition:color .2s; white-space:nowrap;}
+  .legend-item:hover{color:var(--text);}
+  .legend-dot{width:11px; height:11px; border-radius:50%;}
+
+  #graph-container{position:fixed; inset:0; top:66px;}
+  svg{width:100%; height:100%;}
+  .link{stroke:var(--border); stroke-width:1.25; fill:none;}
+  .link.cross{stroke-dasharray:4 3; stroke:#1e2128;}
+
+  .node-group{cursor:pointer;}
+  .node-circle{transition:filter .2s, opacity .2s, stroke-dasharray .2s; stroke: rgba(255,255,255,0.08); stroke-width:1.2;}
+  .node-label{font-size:10.5px; fill:var(--text-dim); text-anchor:middle; pointer-events:none; transition:fill .2s, opacity .2s;}
+  .node-group:hover .node-label{fill:var(--text);}
+  .node-group.selected .node-circle{stroke:#fff; stroke-width:2.4; opacity:1;}
+  .node-group.selected .node-label{fill:#fff; font-weight:600;}
+  .node-ring{fill:none; stroke-width:3; opacity:0; transition:opacity .25s;}
+  .node-group.selected .node-ring{opacity:0.32;}
+
+  /* Lifecycle styles */
+  .lifecycle-current .node-circle{stroke: rgba(109,212,160,0.9); stroke-width:2;}
+  .lifecycle-draft .node-circle{stroke: rgba(255,209,102,0.95); stroke-width:2; stroke-dasharray:4 3; opacity:0.82;}
+  .lifecycle-under-review .node-circle{stroke: rgba(255,209,102,0.95); stroke-width:2.2;}
+  .lifecycle-deprecated .node-circle{opacity:0.55; stroke: rgba(255,123,123,0.95); stroke-width:2;}
+  .lifecycle-missing .node-circle{fill: none !important; opacity:0.9; stroke: rgba(255,123,123,0.95); stroke-width:2.1; stroke-dasharray:3 3;}
+  .review-overdue .node-circle{filter: drop-shadow(0 0 14px rgba(255,123,123,0.55));}
+  .review-upcoming .node-circle{filter: drop-shadow(0 0 10px rgba(255,209,102,0.35));}
+
+  .breadcrumb{
+    position:fixed; top:74px; left:14px; z-index:60;
+    font-size:11px; color:var(--text-dim);
+    display:flex; flex-wrap:wrap; gap:4px; align-items:center;
+    max-width: calc(100vw - 440px);
+  }
+  .breadcrumb .sep{opacity:.4;}
+  .breadcrumb .bc-item{cursor:pointer; transition:color .15s;}
+  .breadcrumb .bc-item:hover{color:var(--text);}
+  .breadcrumb .bc-item.active{color:var(--text); font-weight:600;}
+
+  .panel{
+    position:fixed; top:66px; right:0; width:410px; bottom:0; z-index:50;
+    background:rgba(19,21,24,0.92); backdrop-filter:blur(18px);
+    border-left:1px solid var(--border);
+    overflow-y:auto; padding:22px 20px;
+    transition: transform .32s cubic-bezier(.4,0,.2,1);
+    transform: translateX(100%);
+  }
+  .panel.open{transform:translateX(0);}
+  .panel-close{position:absolute; top:12px; right:14px; background:none; border:none; color:var(--text-dim); font-size:20px; cursor:pointer; line-height:1;}
+  .panel-close:hover{color:var(--text);}
+  .panel-badge{display:inline-block; font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:0.08em; padding:3px 8px; border-radius:20px; margin-bottom:10px;}
+  .panel-title{font-family:'Syne',sans-serif; font-weight:600; font-size:18px; margin-bottom:6px; line-height:1.2;}
+  .panel-desc{font-size:13px; color:var(--text-dim); line-height:1.5; margin-bottom:14px;}
+
+  .meta-grid{display:grid; grid-template-columns: 1fr 1fr; gap:8px; margin:10px 0 6px;}
+  .meta{
+    background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:12px;
+    padding:10px 10px; font-size:12px; color:var(--text);
+  }
+  .meta .k{display:block; font-size:10px; text-transform:uppercase; letter-spacing:0.1em; color:var(--text-dim); margin-bottom:4px;}
+  .chiprow{display:flex; flex-wrap:wrap; gap:6px; margin-top:6px;}
+  .chip{font-size:11px; padding:4px 8px; border-radius:999px; border:1px solid var(--border); color:var(--text-dim); background:rgba(19,21,24,0.6);}
+  .chip.ok{border-color:rgba(109,212,160,0.45); color:rgba(109,212,160,0.95); background:rgba(109,212,160,0.1);}
+  .chip.warn{border-color:rgba(255,209,102,0.45); color:rgba(255,209,102,0.95); background:rgba(255,209,102,0.08);}
+  .chip.bad{border-color:rgba(255,123,123,0.45); color:rgba(255,123,123,0.95); background:rgba(255,123,123,0.08);}
+
+  .panel-section-label{font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:0.1em; color:var(--text-dim); margin-bottom:8px; margin-top:16px;}
+  .panel-children{display:flex; flex-direction:column; gap:6px;}
+  .panel-child{
+    background:var(--surface); border:1px solid var(--border); border-radius:10px;
+    padding:10px 12px; font-size:13px; cursor:pointer;
+    transition: background .18s, border-color .18s;
+    display:flex; align-items:center; gap:9px;
+  }
+  .panel-child:hover{background:var(--surface-hover); border-color:rgba(255,255,255,0.15);}
+  .panel-child .child-dot{width:9px; height:9px; border-radius:50%; flex-shrink:0;}
+  .panel-child .child-label{color:var(--text);}
+  .panel-child .child-sub{font-size:11px; color:var(--text-dim);}
+
+  .preview{
+    white-space:pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-size:11.5px; line-height:1.4; color:rgba(228,230,234,0.9);
+    background:rgba(0,0,0,0.28); border:1px solid rgba(255,255,255,0.08);
+    padding:10px 10px; border-radius:12px;
+  }
+
+  .toast{
+    position:fixed; left:14px; bottom:14px; z-index:120;
+    width:min(560px, calc(100vw - 28px));
+    background:rgba(19,21,24,0.92); border:1px solid var(--border); border-radius:16px;
+    padding:12px 12px; box-shadow:0 18px 60px rgba(0,0,0,0.55);
+    display:none;
+  }
+  .toast.open{display:block;}
+  .toast .t{font-family:'Syne',sans-serif; font-weight:600; font-size:14px; margin-bottom:6px;}
+  .toast .b{font-size:12.5px; color:var(--text-dim); line-height:1.35;}
+  .toast .x{position:absolute; right:10px; top:10px; border:none; background:none; color:var(--text-dim); font-size:18px; cursor:pointer;}
+  .toast .x:hover{color:var(--text);}
+
+  .zoom-controls{
+    position:fixed; bottom:18px; left:50%; transform:translateX(-50%); z-index:60;
+    display:flex; gap:4px;
+    background:rgba(19,21,24,0.88); backdrop-filter:blur(14px);
+    border:1px solid var(--border); border-radius:32px; padding:5px;
+  }
+  .zoom-btn{
+    width:36px; height:36px; border-radius:50%;
+    background:var(--surface); border:1px solid var(--border);
+    color:var(--text); font-size:18px;
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer; transition: background .15s;
+  }
+  .zoom-btn:hover{background:var(--surface-hover);}
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="left">
+      <div class="topbar-title">TTX <span>Knowledge Graph</span> · Demo v5</div>
+      <div class="topbar-sub">Maintain Railcar → Railcar Asset Management → 40: Manage Railcar Asset → 40.3: End of Life of a Railcar → Scrap / Destroy / Sell / Lease Return</div>
+    </div>
+
+    <div class="searchbar" title="Demo query traversal (simulated)">
+      <select id="demo-query">
+        <option value="scrap">Scrap</option>
+        <option value="destroy">Destroy</option>
+        <option value="sell">Sell</option>
+        <option value="lease return">Lease Return</option>
+      </select>
+      <button id="demo-search">Run demo query</button>
+    </div>
+
+    <div class="legend" id="legend"></div>
+  </div>
+
+  <div class="breadcrumb" id="breadcrumb"></div>
+  <div id="graph-container"><svg id="graph"></svg></div>
+
+  <div class="panel" id="panel">
+    <button class="panel-close" id="panel-close">&times;</button>
+    <div id="panel-content"></div>
+  </div>
+
+  <div class="toast" id="toast">
+    <button class="x" id="toast-close">&times;</button>
+    <div class="t" id="toast-title">Demo query result</div>
+    <div class="b" id="toast-body"></div>
+  </div>
+
+  <div class="zoom-controls">
+    <button class="zoom-btn" id="zoom-in">+</button>
+    <button class="zoom-btn" id="zoom-reset">⇳</button>
+    <button class="zoom-btn" id="zoom-out">−</button>
+  </div>
+
+<script>
+const categories = {
+  root:       { color:getCSS('--accent-root'), label:'KB Root' },
+  service:    { color:getCSS('--accent-service'), label:'Enterprise Service' },
+  l1:         { color:getCSS('--accent-l1'), label:'Process L1' },
+  l2:         { color:getCSS('--accent-l2'), label:'Process L2' },
+  l3:         { color:getCSS('--accent-l3'), label:'Process L3' },
+
+  sop:        { color:getCSS('--accent-sop'), label:'SOP (Process Doc)' },
+  howto:      { color:getCSS('--accent-howto'), label:'How-To (System Task)' },
+  section:    { color:getCSS('--accent-section'), label:'Doc Section' },
+
+  ecosystem:  { color:getCSS('--accent-eco'), label:'Ecosystem' },
+  system:     { color:getCSS('--accent-system'), label:'Key Application' },
+
+  integration:{ color:getCSS('--accent-integration'), label:'Integration Doc' },
+  data:       { color:getCSS('--accent-data'), label:'Data Doc' },
+  tech:       { color:getCSS('--accent-tech'), label:'Technical Doc' },
+
+  role:       { color:getCSS('--accent-role'), label:'Team / Role' },
+  governance: { color:getCSS('--accent-governance'), label:'Lifecycle / Governance' }
+};
+function getCSS(varName){ return getComputedStyle(document.documentElement).getPropertyValue(varName).trim(); }
+
+const SOP_SECTIONS = [
+  {key:'purpose', label:'Purpose & Scope', blurb:'Defines what the SOP covers and does not cover.'},
+  {key:'triggers', label:'Triggers & Inputs', blurb:'What starts the process; required inputs/approvals.'},
+  {key:'decision', label:'Decision Logic', blurb:'Decision rules for this disposition path.'},
+  {key:'roles', label:'Roles, Contacts & Escalations', blurb:'Owners, SMEs, support contacts, escalation path.'},
+  {key:'systems', label:'Systems & Order of Operations', blurb:'Systems involved and the recommended execution order.'},
+  {key:'controls', label:'Controls & Audit Evidence', blurb:'Audit trail, evidence, checkpoints.'},
+  {key:'exceptions', label:'Exceptions & Recovery', blurb:'Common failure modes and what to do.'},
+  {key:'related', label:'Related Documents', blurb:'Links to system How-Tos + integration + data references.'}
+];
+const HOWTO_SECTIONS = [
+  {key:'pre', label:'Pre-conditions', blurb:'Access, approvals, data readiness.'},
+  {key:'steps', label:'Steps', blurb:'Exact click-path + validations.'},
+  {key:'post', label:'Post-conditions', blurb:'Expected downstream updates (timing).'},
+  {key:'trouble', label:'Troubleshooting', blurb:'Symptom → cause → fix → owner.'}
+];
+
+const data = {
+  nodes: [
+    { id:'kb-root', label:'TTX\nKnowledge Hub', cat:'root', r:38, depth:0,
+      desc:'Central, governed knowledge aligned to TTX process + ecosystem model (demo slice).',
+      children:['svc-maintain'] },
+
+    { id:'svc-maintain', label:'Maintain\nRailcar', cat:'service', r:26, depth:1, parent:'kb-root',
+      desc:'Enterprise Service (Catalog). Entry point for Maintain Railcar related processes.',
+      lifecycle:'current', owner:'Process Team', lastReview:'2025-12-10', nextReview:'2026-06-10',
+      children:['l1-railcar-asset-mgmt'] },
+
+    { id:'l1-railcar-asset-mgmt', label:'Railcar Asset\nManagement', cat:'l1', r:22, depth:2, parent:'svc-maintain',
+      desc:'TTX E2E Process (Catalog).',
+      lifecycle:'current', owner:'Equipment Operations', lastReview:'2025-11-30', nextReview:'2026-05-30',
+      children:['l2-manage-railcar-asset'] },
+
+    { id:'l2-manage-railcar-asset', label:'40: Manage\nRailcar Asset', cat:'l2', r:20, depth:3, parent:'l1-railcar-asset-mgmt',
+      desc:'Category (Level 1) from Catalog. Contains Process Groups such as End of Life of a Railcar.',
+      lifecycle:'current', owner:'Equipment Operations', lastReview:'2025-11-30', nextReview:'2026-05-30',
+      children:['l3-end-of-life'] },
+
+    { id:'l3-end-of-life', label:'40.3: End of\nLife of a Railcar', cat:'l3', r:18, depth:4, parent:'l2-manage-railcar-asset',
+      desc:'Process Group (Level 2) from Catalog. Disposition paths: Scrap, Destroy, Sell, Lease Return.',
+      lifecycle:'current', owner:'Equipment Operations', lastReview:'2025-10-15', nextReview:'2026-04-15',
+      children:['proc-scrap','proc-destroy','proc-sell','proc-lease-return'] },
+
+    // Four separate processes (L3)
+    { id:'proc-scrap', label:'Scrap\nRailcar', cat:'l3', r:18, depth:5, parent:'l3-end-of-life',
+      desc:'Disposition path: Scrap. Primary Ecosystem: Asset Mgmt. Integrated Ecosystems: eSHIFT, Contact Mgmt.',
+      lifecycle:'current', owner:'Equipment Operations', lastReview:'2025-09-20', nextReview:'2026-03-20',
+      children:['sop-scrap'] },
+
+    { id:'proc-destroy', label:'Destroy\nRailcar', cat:'l3', r:18, depth:5, parent:'l3-end-of-life',
+      desc:'Disposition path: Destroy. Primary Ecosystem: Asset Mgmt. Integrated Ecosystems: eSHIFT, Contact Mgmt.',
+      lifecycle:'current', owner:'Equipment Operations', lastReview:'2025-09-21', nextReview:'2026-03-21',
+      children:['sop-destroy'] },
+
+    { id:'proc-sell', label:'Sell\nRailcar', cat:'l3', r:18, depth:5, parent:'l3-end-of-life',
+      desc:'Disposition path: Sell. Primary Ecosystem: Asset Mgmt. Integrated Ecosystems: eSHIFT.',
+      lifecycle:'current', owner:'Equipment Operations', lastReview:'2025-09-22', nextReview:'2026-03-22',
+      children:['sop-sell'] },
+
+    { id:'proc-lease-return', label:'Lease Return\nRailcar', cat:'l3', r:18, depth:5, parent:'l3-end-of-life',
+      desc:'Disposition path: Lease Return. Primary Ecosystem: Asset Mgmt. Integrated Ecosystems: eSHIFT, Contact Mgmt.',
+      lifecycle:'draft', owner:'Equipment Operations', lastReview:'—', nextReview:'—',
+      children:['sop-lease-return'] },
+
+    // Ecosystems
+    { id:'eco-asset', label:'Asset Mgmt\n(Ecosystem)', cat:'ecosystem', r:18, depth:5,
+      desc:'Primary Ecosystem (Catalog). Bridge connecting process → systems → integrations.',
+      lifecycle:'current', owner:'Systems Architecture', lastReview:'2025-12-01', nextReview:'2026-06-01' },
+
+    { id:'eco-eshift', label:'eSHIFT\n(Ecosystem)', cat:'ecosystem', r:16, depth:6,
+      desc:'Integrated Ecosystem (Catalog). Workflow / coordination.' ,
+      lifecycle:'current', owner:'Systems Architecture', lastReview:'2025-10-01', nextReview:'2026-04-01' },
+
+    { id:'eco-contact', label:'Contact Mgmt\n(Ecosystem)', cat:'ecosystem', r:16, depth:6,
+      desc:'Integrated Ecosystem (Catalog). Supports directory/contact references.',
+      lifecycle:'under-review', owner:'Systems Architecture', lastReview:'2024-12-01', nextReview:'2025-06-01' },
+
+    // Key apps (shared)
+    { id:'sys-maximo', label:'Maximo\n(Key App)', cat:'system', r:15, depth:6,
+      desc:'Key Application (Catalog). Used to execute disposition steps.',
+      lifecycle:'current', owner:'Equipment Operations', lastReview:'2025-11-12', nextReview:'2026-05-12' },
+
+    { id:'sys-oracle', label:'Oracle-ERP\n(Key App)', cat:'system', r:15, depth:6,
+      desc:'Key Application (Catalog). Financial posting / reconciliation.',
+      lifecycle:'current', owner:'Finance', lastReview:'2025-08-01', nextReview:'2026-02-01' },
+
+    { id:'sys-umler', label:'Railinc-UMLER\n(Key App)', cat:'system', r:15, depth:6,
+      desc:'Key Application (Catalog). Reporting/status validation.',
+      lifecycle:'current', owner:'Railcar Operations', lastReview:'2025-07-10', nextReview:'2026-01-10' },
+
+    { id:'sys-bd', label:'Business Directory\n(BD)', cat:'system', r:14, depth:6,
+      desc:'Key Application (Catalog) for Contact Mgmt linkage.',
+      lifecycle:'missing', owner:'Contact Mgmt', lastReview:'—', nextReview:'—' },
+
+    // SOPs per process
+    { id:'sop-scrap', label:'SOP:\nScrap Railcar', cat:'sop', r:18, depth:6, parent:'proc-scrap',
+      desc:'Anchor SOP: business logic + roles + system tasks + references (Scrap).',
+      lifecycle:'current', owner:'Equipment Operations', lastReview:'2025-09-20', nextReview:'2026-03-20',
+      children:[] },
+
+    { id:'sop-destroy', label:'SOP:\nDestroy Railcar', cat:'sop', r:18, depth:6, parent:'proc-destroy',
+      desc:'Anchor SOP: business logic + roles + system tasks + references (Destroy).',
+      lifecycle:'current', owner:'Equipment Operations', lastReview:'2025-09-21', nextReview:'2026-03-21',
+      children:[] },
+
+    { id:'sop-sell', label:'SOP:\nSell Railcar', cat:'sop', r:18, depth:6, parent:'proc-sell',
+      desc:'Anchor SOP: business logic + roles + system tasks + references (Sell).',
+      lifecycle:'current', owner:'Equipment Operations', lastReview:'2025-09-22', nextReview:'2026-03-22',
+      children:[] },
+
+    { id:'sop-lease-return', label:'SOP:\nLease Return Railcar', cat:'sop', r:18, depth:6, parent:'proc-lease-return',
+      desc:'Anchor SOP: business logic + roles + system tasks + references (Lease Return).',
+      lifecycle:'draft', owner:'Equipment Operations', lastReview:'—', nextReview:'—',
+      children:[] },
+
+    // Teams / Roles
+    { id:'team-eq-ops', label:'Equipment\nOperations', cat:'role', r:13, depth:6,
+      desc:'Primary process owner (Maintain Railcar / Asset Mgmt).', lifecycle:'current' },
+    { id:'team-finance', label:'Finance', cat:'role', r:13, depth:6,
+      desc:'Owns Oracle-ERP posting/recon guidance.', lifecycle:'current' },
+    { id:'team-railops', label:'Railcar\nOperations', cat:'role', r:13, depth:6,
+      desc:'Owns Railinc-UMLER usage and status validation guidance.', lifecycle:'current' },
+    { id:'team-sa', label:'Systems\nArchitecture', cat:'role', r:13, depth:6,
+      desc:'Owns ecosystem mapping, integration view, and standards.', lifecycle:'current' },
+    { id:'team-support', label:'Application\nSupport', cat:'role', r:13, depth:6,
+      desc:'Escalation point for failures / access / integration issues.', lifecycle:'current' },
+
+    // Shared system how-tos (reused across processes)
+    { id:'ht-maximo-disposition', label:'How-To:\nDisposition in\nMaximo', cat:'howto', r:16, depth:7,
+      desc:'System task doc: execute Scrap/Destroy/Sell/Lease Return disposition steps in Maximo.', lifecycle:'current', owner:'Equipment Operations', lastReview:'2025-09-01', nextReview:'2026-03-01',
+      children:[] },
+    { id:'ht-oracle-verify', label:'How-To:\nVerify Posting\nin Oracle-ERP', cat:'howto', r:14, depth:7,
+      desc:'System task doc: verify postings and reconciliation for disposition.', lifecycle:'under-review', owner:'Finance', lastReview:'2024-12-15', nextReview:'2025-06-15',
+      children:[] },
+    { id:'ht-umler-verify', label:'How-To:\nVerify Status\nin Railinc-UMLER', cat:'howto', r:14, depth:7,
+      desc:'System task doc: confirm UMLER status and timing.', lifecycle:'current', owner:'Railcar Operations', lastReview:'2025-07-10', nextReview:'2026-01-10',
+      children:[] },
+    { id:'ht-eshift', label:'How-To:\nCoordination\nin eSHIFT', cat:'howto', r:14, depth:7,
+      desc:'System task doc: approvals/routing and coordination steps.', lifecycle:'missing', owner:'eSHIFT Team', lastReview:'—', nextReview:'—',
+      children:[] },
+
+    // Technical docs (shared)
+    { id:'int-maximo-oracle', label:'Integration Spec:\nMaximo ↔ Oracle-ERP', cat:'integration', r:14, depth:7,
+      desc:'Data flows, timing windows, and failure modes.', lifecycle:'current', owner:'Systems Architecture', lastReview:'2025-10-01', nextReview:'2026-04-01' },
+    { id:'int-maximo-umler', label:'Integration Spec:\nMaximo → Railinc-UMLER', cat:'integration', r:14, depth:7,
+      desc:'Payload + validation rules + timing.', lifecycle:'current', owner:'Systems Architecture', lastReview:'2025-10-01', nextReview:'2026-04-01' },
+    { id:'data-dict', label:'Data Dictionary:\nDisposition Fields', cat:'data', r:14, depth:7,
+      desc:'Field definitions and allowed values.', lifecycle:'draft', owner:'Data & BI Mgmt', lastReview:'—', nextReview:'—' },
+    { id:'runbook', label:'Runbook:\nDisposition Failures', cat:'tech', r:14, depth:7,
+      desc:'Recovery steps and escalation matrix.', lifecycle:'current', owner:'Application Support', lastReview:'2025-08-10', nextReview:'2026-02-10' },
+
+    // Governance
+    { id:'gov', label:'Document\nLifecycle Rules', cat:'governance', r:14, depth:6,
+      desc:'Ownership + review cadence + deprecate policy (for safe AI retrieval).',
+      lifecycle:'current', owner:'KM Owner', lastReview:'2025-12-20', nextReview:'2026-06-20' }
+  ],
+  crossLinks: [
+    // Process ↔ ecosystems
+    { source:'proc-scrap', target:'eco-asset', label:'primary ecosystem' },
+    { source:'proc-scrap', target:'eco-eshift', label:'integrated ecosystem' },
+    { source:'proc-scrap', target:'eco-contact', label:'integrated ecosystem' },
+
+    { source:'proc-destroy', target:'eco-asset', label:'primary ecosystem' },
+    { source:'proc-destroy', target:'eco-eshift', label:'integrated ecosystem' },
+    { source:'proc-destroy', target:'eco-contact', label:'integrated ecosystem' },
+
+    { source:'proc-sell', target:'eco-asset', label:'primary ecosystem' },
+    { source:'proc-sell', target:'eco-eshift', label:'integrated ecosystem' },
+
+    { source:'proc-lease-return', target:'eco-asset', label:'primary ecosystem' },
+    { source:'proc-lease-return', target:'eco-eshift', label:'integrated ecosystem' },
+    { source:'proc-lease-return', target:'eco-contact', label:'integrated ecosystem' },
+
+    // Ecosystems contain apps
+    { source:'eco-asset', target:'sys-maximo', label:'key application' },
+    { source:'eco-asset', target:'sys-oracle', label:'key application' },
+    { source:'eco-asset', target:'sys-umler', label:'key application' },
+    { source:'eco-contact', target:'sys-bd', label:'key application' },
+
+    // SOP ownership & governance
+    { source:'sop-scrap', target:'team-eq-ops', label:'owned by' },
+    { source:'sop-destroy', target:'team-eq-ops', label:'owned by' },
+    { source:'sop-sell', target:'team-eq-ops', label:'owned by' },
+    { source:'sop-lease-return', target:'team-eq-ops', label:'owned by' },
+
+    { source:'sop-scrap', target:'team-sa', label:'reviewed by' },
+    { source:'sop-destroy', target:'team-sa', label:'reviewed by' },
+    { source:'sop-sell', target:'team-sa', label:'reviewed by' },
+    { source:'sop-lease-return', target:'team-sa', label:'reviewed by' },
+
+    { source:'sop-scrap', target:'team-support', label:'supported by' },
+    { source:'sop-destroy', target:'team-support', label:'supported by' },
+    { source:'sop-sell', target:'team-support', label:'supported by' },
+    { source:'sop-lease-return', target:'team-support', label:'supported by' },
+
+    { source:'sop-scrap', target:'gov', label:'governed by' },
+    { source:'sop-destroy', target:'gov', label:'governed by' },
+    { source:'sop-sell', target:'gov', label:'governed by' },
+    { source:'sop-lease-return', target:'gov', label:'governed by' },
+
+    // SOPs link to shared how-tos
+    ...['sop-scrap','sop-destroy','sop-sell','sop-lease-return'].flatMap(s=>[
+      { source:s, target:'ht-maximo-disposition', label:'step detail' },
+      { source:s, target:'ht-oracle-verify', label:'step detail' },
+      { source:s, target:'ht-umler-verify', label:'step detail' },
+      { source:s, target:'ht-eshift', label:'step detail' },
+      { source:s, target:'int-maximo-oracle', label:'reference' },
+      { source:s, target:'int-maximo-umler', label:'reference' },
+      { source:s, target:'data-dict', label:'reference' },
+      { source:s, target:'runbook', label:'exceptions' },
+    ]),
+
+    // How-tos use systems
+    { source:'ht-maximo-disposition', target:'sys-maximo', label:'uses' },
+    { source:'ht-oracle-verify', target:'sys-oracle', label:'uses' },
+    { source:'ht-umler-verify', target:'sys-umler', label:'uses' },
+    { source:'ht-eshift', target:'eco-eshift', label:'in' },
+
+    // Technical docs connect systems
+    { source:'int-maximo-oracle', target:'sys-maximo', label:'connects' },
+    { source:'int-maximo-oracle', target:'sys-oracle', label:'connects' },
+    { source:'int-maximo-umler', target:'sys-maximo', label:'connects' },
+    { source:'int-maximo-umler', target:'sys-umler', label:'connects' },
+
+    { source:'runbook', target:'int-maximo-oracle', label:'uses' },
+    { source:'runbook', target:'int-maximo-umler', label:'uses' },
+  ]
+};
+
+const nodeMap = {}; data.nodes.forEach(n => nodeMap[n.id]=n);
+function nodeTitle(n){ return (n.label||'').replace(/\n/g,' '); }
+
+// Add SOP sections (for each SOP) + one shared How-To sections
+function secId(docId,key){ return `${docId}-sec-${key}`; }
+const sectionNodes = [];
+
+function addSopSections(sopId, processName, includeContactMgmt){
+  const sop = nodeMap[sopId];
+  sop.children = SOP_SECTIONS.map(s=>secId(sopId,s.key));
+  SOP_SECTIONS.forEach(s=>{
+    const content = (s.key==='decision') ? `Decision logic (illustrative) for ${processName}:\n- Define entry criteria\n- Define approvals\n- Define downstream impacts\n\n(Replace with TTX-approved logic.)` :
+                   (s.key==='systems') ? `Systems involved (Catalog pattern):\n1) Maximo\n2) Oracle-ERP\n3) Railinc-UMLER\n4) eSHIFT (coordination)\n${includeContactMgmt ? '5) Contact Mgmt / Business Directory\n' : ''}` :
+                   (s.key==='roles') ? `Owners:\n- Equipment Operations (process owner)\n- Systems Architecture (integration view)\n- Application Support (escalations)\n\nRelated:\n- Finance (Oracle-ERP)\n- Railcar Operations (UMLER)` :
+                   '';
+    sectionNodes.push({
+      id: secId(sopId, s.key),
+      label: s.label.split(' ').join('\n'),
+      cat:'section',
+      r: 11,
+      depth: (sop.depth||6)+1,
+      parent:sopId,
+      doc: nodeTitle(sop),
+      desc: s.blurb,
+      lifecycle: sop.lifecycle || 'current',
+      content: content
+    });
+  });
+
+  // Section-level crosslinks to make “sections” non-standalone
+  data.crossLinks = data.crossLinks.concat([
+    { source: secId(sopId,'systems'), target:'sys-maximo', label:'includes' },
+    { source: secId(sopId,'systems'), target:'sys-oracle', label:'includes' },
+    { source: secId(sopId,'systems'), target:'sys-umler', label:'includes' },
+    { source: secId(sopId,'systems'), target:'eco-eshift', label:'includes' },
+    ...(includeContactMgmt ? [{ source: secId(sopId,'systems'), target:'eco-contact', label:'includes' }] : []),
+
+    { source: secId(sopId,'roles'), target:'team-eq-ops', label:'lists' },
+    { source: secId(sopId,'roles'), target:'team-support', label:'lists' },
+
+    { source: secId(sopId,'related'), target:'ht-maximo-disposition', label:'links to' },
+    { source: secId(sopId,'related'), target:'int-maximo-oracle', label:'links to' },
+    { source: secId(sopId,'exceptions'), target:'runbook', label:'see' },
+  ]);
+}
+
+function addHowtoSections(htId){
+  const ht = nodeMap[htId];
+  ht.children = HOWTO_SECTIONS.map(s=>secId(htId,s.key));
+  HOWTO_SECTIONS.forEach(s=>{
+    const content = (s.key==='steps') ? `Example steps (illustrative):\n1) Locate railcar asset in Maximo\n2) Select disposition action\n3) Enter required fields\n4) Attach evidence (if required)\n5) Submit and capture confirmation\n6) Verify downstream updates (Oracle-ERP, UMLER)\n\n(Replace with TTX-approved steps.)` : '';
+    sectionNodes.push({
+      id: secId(htId, s.key),
+      label: s.label.split(' ').join('\n'),
+      cat:'section',
+      r: 10.5,
+      depth: (ht.depth||7)+1,
+      parent: htId,
+      doc: nodeTitle(ht),
+      desc: s.blurb,
+      lifecycle: ht.lifecycle || 'current',
+      content: content
+    });
+  });
+}
+
+// Add sections for all four SOPs
+addSopSections('sop-scrap','Scrap', true);
+addSopSections('sop-destroy','Destroy', true);
+addSopSections('sop-sell','Sell', false);
+addSopSections('sop-lease-return','Lease Return', true);
+addHowtoSections('ht-maximo-disposition');
+
+data.nodes = data.nodes.concat(sectionNodes);
+data.nodes.forEach(n => nodeMap[n.id]=n);
+
+// Shared how-to postconditions link out
+data.crossLinks = data.crossLinks.concat([
+  { source: secId('ht-maximo-disposition','post'), target:'ht-oracle-verify', label:'validate with' },
+  { source: secId('ht-maximo-disposition','post'), target:'ht-umler-verify', label:'validate with' }
+]);
+
+// Build tree links from children
+const treeLinks = [];
+data.nodes.forEach(n => {
+  if(n.children && n.children.length){
+    n.children.forEach(cid => { if(nodeMap[cid]) treeLinks.push({source:n.id, target:cid, type:'tree'}); });
+  }
+});
+const crossLinks = (data.crossLinks || []).map(l => ({...l, type:'cross'}));
+const allLinks = treeLinks.concat(crossLinks);
+
+// ---------- D3 ----------
+const W = window.innerWidth;
+const H = window.innerHeight - 66;
+const svg = d3.select('#graph').attr('width', W).attr('height', H);
+const g = svg.append('g');
+
+const zoom = d3.zoom().scaleExtent([0.22, 7]).on('zoom', (event) => g.attr('transform', event.transform));
+svg.call(zoom);
+const initTransform = d3.zoomIdentity.translate(W/2, H/2 + 14).scale(0.92);
+svg.call(zoom.transform, initTransform);
+
+// Layout bias: process → SOP → section/howto → systems/tech
+function xTarget(d){
+  if(['service','l1','l2','l3'].includes(d.cat)) return -W*0.24;
+  if(d.cat==='sop') return -W*0.07;
+  if(d.cat==='section') return W*0.05;
+  if(d.cat==='howto') return W*0.18;
+  if(['ecosystem','system','integration','data','tech','governance'].includes(d.cat)) return W*0.33;
+  if(d.cat==='role') return W*0.12;
+  return 0;
+}
+function yTarget(d){
+  const base = -H*0.37;
+  const step = 68;
+  return base + (Math.min(8, d.depth||0) * step);
+}
+
+const sim = d3.forceSimulation(data.nodes)
+  .force('link', d3.forceLink(allLinks).id(d => d.id)
+    .distance(d => d.type==='cross' ? 210 : 95)
+    .strength(d => d.type==='cross' ? 0.09 : 0.3)
+  )
+  .force('charge', d3.forceManyBody().strength(d => -(d.r*d.r*2.8)))
+  .force('collision', d3.forceCollide().radius(d => d.r + 18).strength(0.75))
+  .force('center', d3.forceCenter(0, 0))
+  .force('x', d3.forceX(d => xTarget(d)).strength(0.22))
+  .force('y', d3.forceY(d => yTarget(d)).strength(0.22))
+  .alphaDecay(0.03)
+  .velocityDecay(0.28);
+
+const link = g.append('g').selectAll('line')
+  .data(allLinks)
+  .join('line')
+  .attr('class', d => d.type === 'cross' ? 'link cross' : 'link');
+
+const node = g.append('g').selectAll('.node-group')
+  .data(data.nodes)
+  .join('g')
+  .attr('class', d => lifecycleClass(d) )
+  .classed('node-group', true)
+  .call(d3.drag()
+    .on('start',(event,d)=>{ if(!event.active) sim.alphaTarget(0.3).restart(); d.fx=d.x; d.fy=d.y; })
+    .on('drag',(event,d)=>{ d.fx=event.x; d.fy=event.y; })
+    .on('end',(event,d)=>{ if(!event.active) sim.alphaTarget(0); d.fx=null; d.fy=null; })
+  )
+  .on('click',(event,d)=>{ event.stopPropagation(); selectNode(d); })
+  .on('dblclick',(event,d)=>{ event.stopPropagation(); zoomToNode(d); });
+
+node.append('circle').attr('class','node-ring').attr('r', d => d.r + 6).attr('stroke', d => categories[d.cat].color);
+node.append('circle')
+  .attr('class','node-circle')
+  .attr('r', d => d.r)
+  .attr('fill', d => categories[d.cat].color)
+  .attr('opacity', d => d.depth === 0 ? 1 : d.depth === 1 ? 0.88 : (d.cat==='section'?0.78:0.82))
+  .style('filter', d => `drop-shadow(0 2px 6px ${categories[d.cat].color}44)`);
+
+node.append('text')
+  .attr('class','node-label')
+  .attr('dy','0.35em')
+  .each(function(d){
+    const sel = d3.select(this);
+    const lines = (d.label || '').split('\n');
+    sel.selectAll('tspan').remove();
+    lines.forEach((line,i)=>{ sel.append('tspan').attr('x',0).attr('dy', i===0 ? (lines.length>1?'-0.3em':'0') : '1.2em').text(line); });
+  });
+
+sim.on('tick',()=>{
+  link.attr('x1', d => d.source.x).attr('y1', d => d.source.y).attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+  node.attr('transform', d => `translate(${d.x},${d.y})`);
+});
+
+function lifecycleClass(d){
+  const lc = d.lifecycle || '';
+  const rs = reviewStatus(d);
+  const parts = ['node-group'];
+  if(lc) parts.push(`lifecycle-${lc.replaceAll(' ','-')}`);
+  if(rs) parts.push(rs);
+  return parts.join(' ');
+}
+function reviewStatus(d){
+  const today = new Date('2026-02-07T00:00:00'); // fixed for demo
+  if(!d.nextReview || d.nextReview==='—') return null;
+  const nr = new Date(d.nextReview+'T00:00:00');
+  if(isNaN(nr.getTime())) return null;
+  if(nr < today) return 'review-overdue';
+  const diffDays = (nr - today) / (1000*60*60*24);
+  if(diffDays <= 30) return 'review-upcoming';
+  return null;
+}
+
+// Legend
+const legendEl = document.getElementById('legend');
+Object.entries(categories).forEach(([key,val])=>{
+  if(['root'].includes(key)) return;
+  legendEl.innerHTML += `<div class="legend-item" data-cat="${key}">
+    <div class="legend-dot" style="background:${val.color}"></div>${val.label}</div>`;
+});
+
+// Selection + panel
+let selectedNode = null;
+function selectAndZoom(id){ const d=nodeMap[id]; if(!d) return; selectNode(d); zoomToNode(d); }
+window.selectAndZoom = selectAndZoom;
+
+function selectNode(d){
+  node.classed('selected', false);
+  if(selectedNode && selectedNode.id === d.id){
+    selectedNode = null; closePanel(); updateBreadcrumb(null);
+    link.style('stroke', l => l.type === 'cross' ? '#1e2128' : getCSS('--border')).style('stroke-width', 1.25).attr('opacity',1);
+    return;
+  }
+  selectedNode = d;
+  node.filter(n => n.id === d.id).classed('selected', true);
+
+  const color = categories[d.cat].color;
+  link.style('stroke', function(l){
+      const sid = l.source.id || l.source, tid = l.target.id || l.target;
+      const connected = (sid === d.id || tid === d.id);
+      if(!connected) return l.type === 'cross' ? '#1e2128' : getCSS('--border');
+      return color;
+    })
+    .style('stroke-width', function(l){
+      const sid = l.source.id || l.source, tid = l.target.id || l.target;
+      const connected = (sid === d.id || tid === d.id);
+      return connected ? (l.type === 'cross' ? 2.1 : 2.5) : 1.25;
+    })
+    .attr('opacity', function(l){
+      const sid = l.source.id || l.source, tid = l.target.id || l.target;
+      const connected = (sid === d.id || tid === d.id);
+      return connected ? 1 : 0.25;
+    });
+
+  openPanel(d); updateBreadcrumb(d);
+}
+
+function statusChip(d){
+  const lc = d.lifecycle || 'current';
+  const rs = reviewStatus(d);
+  if(lc === 'missing') return `<span class="chip bad">Missing</span>`;
+  if(lc === 'deprecated') return `<span class="chip bad">Deprecated</span>`;
+  if(lc === 'draft') return `<span class="chip warn">Draft</span>`;
+  if(lc === 'under-review') return `<span class="chip warn">Under review</span>`;
+  if(rs === 'review-overdue') return `<span class="chip bad">Review overdue</span>`;
+  if(rs === 'review-upcoming') return `<span class="chip warn">Review due soon</span>`;
+  return `<span class="chip ok">Current</span>`;
+}
+
+function openPanel(d){
+  const color = categories[d.cat].color;
+  document.getElementById('panel').classList.add('open');
+
+  const connected = allLinks.filter(l => l.type==='cross' && (l.source.id===d.id || l.target.id===d.id));
+  const reuse = connected.length;
+
+  const meta = `
+    <div class="meta-grid">
+      <div class="meta"><span class="k">Owner</span>${d.owner || '—'}</div>
+      <div class="meta"><span class="k">Status</span>${statusChip(d)}</div>
+      <div class="meta"><span class="k">Last review</span>${d.lastReview || '—'}</div>
+      <div class="meta"><span class="k">Next review</span>${d.nextReview || '—'}</div>
+    </div>
+    <div class="chiprow">
+      <span class="chip">Connections: ${reuse}</span>
+      ${d.cat==='system' ? `<span class="chip">Reused by: Scrap, Destroy, Sell, Lease Return</span>` : ''}
+      ${d.cat==='howto' ? `<span class="chip">Reusable task doc</span>` : ''}
+    </div>
+  `;
+
+  let childrenHtml = '';
+  if(d.children && d.children.length){
+    childrenHtml = `<div class="panel-section-label">Contains</div><div class="panel-children">` +
+      d.children.map(cid=>{
+        const child = nodeMap[cid]; if(!child) return '';
+        const cc = categories[child.cat].color;
+        return `<div class="panel-child" onclick="selectAndZoom('${cid}')">
+          <div class="child-dot" style="background:${cc}"></div>
+          <div>
+            <div class="child-label">${nodeTitle(child)}</div>
+            ${child.cat==='section' ? `<div class="child-sub" style="margin-top:2px">In: ${child.doc || ''}</div>` : ''}
+            <div class="child-sub">${((child.desc||'')+'').substring(0,92)}…</div>
+          </div></div>`;
+      }).join('') + `</div>`;
+  }
+
+  const related = connected.map(l => ({ other: nodeMap[(l.source.id === d.id) ? l.target.id : l.source.id], label: l.label }))
+    .filter(x => x.other);
+
+  let relatedHtml = '';
+  if(related.length){
+    relatedHtml = `<div class="panel-section-label">Connected</div><div class="panel-children">` +
+      related.slice(0, 18).map(x=>{
+        const cc = categories[x.other.cat].color;
+        return `<div class="panel-child" onclick="selectAndZoom('${x.other.id}')">
+          <div class="child-dot" style="background:${cc}"></div>
+          <div>
+            <div class="child-label">${nodeTitle(x.other)}</div>
+            <div class="child-sub">${x.label}${x.other.cat==='section' ? ` · In: ${x.other.doc || ''}` : ''}</div>
+          </div></div>`;
+      }).join('') + `</div>`;
+  }
+
+  let previewHtml = '';
+  if(d.content){
+    previewHtml = `<div class="panel-section-label">Content Preview (demo)</div><div class="preview">${escapeHtml(d.content)}</div>`;
+  }
+
+  const badge = `<div class="panel-badge" style="background:${color}22; color:${color}; border:1px solid ${color}55;">${categories[d.cat].label}</div>`;
+  document.getElementById('panel-content').innerHTML =
+    `${badge}<div class="panel-title">${nodeTitle(d)}</div><div class="panel-desc">${d.desc||''}</div>${meta}${childrenHtml}${previewHtml}${relatedHtml}`;
+}
+
+function escapeHtml(s){
+  return (s||'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
+}
+
+function closePanel(){ document.getElementById('panel').classList.remove('open'); }
+document.getElementById('panel-close').addEventListener('click', closePanel);
+svg.on('click', ()=>{ selectedNode=null; node.classed('selected',false); closePanel(); updateBreadcrumb(null);
+  link.style('stroke', l => l.type === 'cross' ? '#1e2128' : getCSS('--border')).style('stroke-width', 1.25).attr('opacity',1);
+});
+
+// Breadcrumb
+function updateBreadcrumb(d){
+  const el = document.getElementById('breadcrumb');
+  if(!d){ el.innerHTML=''; return; }
+  const path=[]; let cur=d;
+  while(cur){ path.unshift(cur); cur = cur.parent ? nodeMap[cur.parent] : null; }
+  el.innerHTML = path.map((n,i)=>{
+    const cls = (i===path.length-1) ? 'bc-item active' : 'bc-item';
+    return `<span class="${cls}" onclick="selectAndZoom('${n.id}')">${nodeTitle(n)}</span>` + (i<path.length-1?`<span class="sep">›</span>`:'');
+  }).join('');
+}
+
+// Zoom controls
+function zoomToNode(d){
+  const t = d3.zoomTransform(svg.node());
+  const k = Math.min(2.2, Math.max(0.8, t.k));
+  svg.transition().duration(420).call(zoom.transform, d3.zoomIdentity.translate(W/2, H/2).scale(k).translate(-d.x, -d.y));
+}
+document.getElementById('zoom-in').addEventListener('click', ()=> svg.transition().duration(180).call(zoom.scaleBy, 1.25));
+document.getElementById('zoom-out').addEventListener('click', ()=> svg.transition().duration(180).call(zoom.scaleBy, 0.8));
+document.getElementById('zoom-reset').addEventListener('click', ()=> svg.transition().duration(260).call(zoom.transform, initTransform));
+
+// Legend focus
+let focusedCat = null;
+document.querySelectorAll('.legend-item').forEach(item=>{
+  item.addEventListener('click', ()=>{
+    const cat = item.getAttribute('data-cat');
+    if(focusedCat === cat){ focusedCat=null; resetFocus(); return; }
+    focusedCat=cat; applyFocus(cat);
+  });
+});
+function applyFocus(cat){
+  node.selectAll('.node-circle').attr('opacity', d => d.cat===cat ? 1 : 0.12);
+  node.selectAll('.node-label').attr('opacity', d => d.cat===cat ? 1 : 0.08);
+  link.attr('opacity', l => ((l.source.cat===cat)||(l.target.cat===cat)) ? 0.9 : 0.08);
+}
+function resetFocus(){
+  node.selectAll('.node-circle').attr('opacity', d => d.depth===0?1:d.depth===1?0.88:(d.cat==='section'?0.78:0.82));
+  node.selectAll('.node-label').attr('opacity', 1);
+  link.attr('opacity', 1);
+}
+
+// Toast
+function showToast(title, body){
+  const toast = document.getElementById('toast');
+  document.getElementById('toast-title').textContent = title;
+  document.getElementById('toast-body').textContent = body;
+  toast.classList.add('open');
+}
+document.getElementById('toast-close').addEventListener('click', ()=>document.getElementById('toast').classList.remove('open'));
+
+// Demo Query Traversal: selector (Scrap / Destroy / Sell / Lease Return)
+const demoQueries = {
+  "scrap": {
+    path: ['proc-scrap','sop-scrap','sop-scrap-sec-systems','ht-maximo-disposition','ht-maximo-disposition-sec-steps'],
+    title: "AI traversal: Scrap → SOP → Systems → How-To → Steps",
+    explanation: "A structured KB routes users to the right SOP section and task steps instead of searching folders."
+  },
+  "destroy": {
+    path: ['proc-destroy','sop-destroy','sop-destroy-sec-decision','ht-maximo-disposition','ht-maximo-disposition-sec-steps','runbook'],
+    title: "AI traversal: Destroy → SOP → Decision logic → Steps → Recovery",
+    explanation: "Destroy has different decision rules than Scrap. The SOP isolates logic and links runbooks for failures."
+  },
+  "sell": {
+    path: ['proc-sell','sop-sell','sop-sell-sec-decision','ht-maximo-disposition','ht-maximo-disposition-sec-steps','ht-oracle-verify'],
+    title: "AI traversal: Sell → SOP → Decision logic → Steps → Verify",
+    explanation: "Sell is a separate disposition with different logic than Scrap/Destroy. SOP sections keep it clean."
+  },
+  "lease return": {
+    path: ['proc-lease-return','sop-lease-return','sop-lease-return-sec-roles','sop-lease-return-sec-systems','ht-maximo-disposition','ht-eshift'],
+    title: "AI traversal: Lease Return → SOP → Roles & Systems → Coordination",
+    explanation: "Lease Return often involves coordination. The KB links SOP → eSHIFT tasks + ownership/escalations."
+  }
+};
+
+function highlightPath(ids){
+  const set = new Set(ids);
+  node.selectAll('.node-circle').attr('opacity', d => set.has(d.id) ? 1 : 0.08);
+  node.selectAll('.node-label').attr('opacity', d => set.has(d.id) ? 1 : 0.06);
+  link.attr('opacity', l => {
+    const sid=l.source.id||l.source, tid=l.target.id||l.target;
+    return (set.has(sid) && set.has(tid)) ? 1 : 0.05;
+  }).style('stroke-width', l => {
+    const sid=l.source.id||l.source, tid=l.target.id||l.target;
+    return (set.has(sid) && set.has(tid)) ? 2.6 : 1.25;
+  });
+
+  let i=0;
+  const timer = setInterval(()=>{
+    if(i>=ids.length){ clearInterval(timer); return; }
+    const d = nodeMap[ids[i]];
+    if(d){ selectNode(d); zoomToNode(d); }
+    i++;
+  }, 520);
+
+  setTimeout(()=>{ resetFocus(); link.attr('opacity',1).style('stroke-width', 1.25).style('stroke', d => d.type==='cross' ? '#1e2128' : getCSS('--border')); }, 6500);
+}
+
+document.getElementById('demo-search').addEventListener('click', ()=>{
+  const q = (document.getElementById('demo-query').value || '').toLowerCase();
+  const hit = demoQueries[q];
+  if(!hit) return;
+  showToast(hit.title, hit.explanation);
+  highlightPath(hit.path);
+});
+</script>
+</body>
+</html>
